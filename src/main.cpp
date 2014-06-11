@@ -6,11 +6,12 @@ and may not be redistributed without written permission.*/
 #include <SDL2/SDL_image.h>
 #include <stdio.h>
 #include <string>
+#include <ctime>
 
 //Screen dimension constants
 int SCREEN_WIDTH = 640;
 int SCREEN_HEIGHT = 480;
-
+const int GIRLS_COUNT = 50;
 //Texture wrapper class
 class LTexture
 {
@@ -101,7 +102,7 @@ class Dot
 		static const int DOT_VEL = 10;
 
 		//Initializes the variables
-		Dot();
+		Dot(int, int, int, int);
 
 		//Takes key presses and adjusts the dot's velocity
 		void handleEvent( SDL_Event& e );
@@ -112,12 +113,29 @@ class Dot
 		//Shows the dot on the screen
 		void render();
 
-    private:
 		//The X and Y offsets of the dot
 		int mPosX, mPosY;
 
 		//The velocity of the dot
-		int mVelX, mVelY;
+		float mVelX, mVelY;
+};
+
+class girl : public Dot{
+public:
+    girl(int x, int y, int VelX, int VelY):Dot(x, y, VelX, VelY){
+    };
+
+    void velCalcX(){
+        int a = rand() % 200 - 100;
+        float b = a/100.0;
+        mVelX += b;
+    }
+    void velCalcY(){
+        int a = rand() % 200 - 100;
+        float b = a/100.0;
+        mVelY += b;
+    }
+    void move();
 };
 
 //Starts up SDL and creates window
@@ -287,15 +305,15 @@ int LTexture::getHeight()
 }
 
 
-Dot::Dot()
+Dot::Dot(int x, int y, int VelX, int VelY)
 {
     //Initialize the offsets
-    mPosX = 0;
-    mPosY = 0;
+    mPosX = x;
+    mPosY = y;
 
     //Initialize the velocity
-    mVelX = 0;
-    mVelY = 0;
+    mVelX = VelX;
+    mVelY = VelY;
 }
 
 void Dot::handleEvent( SDL_Event& e )
@@ -349,6 +367,29 @@ void Dot::move()
     }
 }
 
+void girl::move()
+{
+    //Move the dot left or right
+    mPosX += mVelX;
+
+    //If the dot went too far to the left or right
+    if( ( mPosX < 0 ) || ( mPosX + DOT_WIDTH > SCREEN_WIDTH ) )
+    {
+        //Move back
+        mVelX = -0.8 * mVelX;
+    }
+
+    //Move the dot up or down
+    mPosY += mVelY;
+
+    //If the dot went too far up or down
+    if( ( mPosY < 0 ) || ( mPosY + DOT_HEIGHT > SCREEN_HEIGHT ) )
+    {
+        //Move back
+        mVelY = -0.8 * mVelY;
+    }
+}
+
 void Dot::render()
 {
     //Show the dot
@@ -378,10 +419,10 @@ bool init()
             printf("Could not get display mode for video display #%d: %s", 0, SDL_GetError());
         }
         else{
-            SCREEN_HEIGHT = current.h;
+            SCREEN_HEIGHT = current.h - 50;
             SCREEN_WIDTH = current.w;
             //Create window
-            gWindow = SDL_CreateWindow( "SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN );
+            gWindow = SDL_CreateWindow( "Get a woman or die trying", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED - 50, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN );
             if( gWindow == NULL )
             {
                 printf( "Window could not be created! SDL Error: %s\n", SDL_GetError() );
@@ -428,7 +469,7 @@ bool loadMedia()
 	bool success = true;
 
 	//Load dot texture
-	if( !gDotTexture.loadFromFile( "dot.bmp" ) )
+	if( !gDotTexture.loadFromFile( "img/dot.bmp" ) )
 	{
 		printf( "Failed to load dot texture!\n" );
 		success = false;
@@ -455,6 +496,7 @@ void close()
 
 int main( int argc, char* args[] )
 {
+    std::clock_t start = std::clock();
 	//Start up SDL and create window
 	if( !init() )
 	{
@@ -476,7 +518,11 @@ int main( int argc, char* args[] )
 			SDL_Event e;
 
 			//The dot that will be moving around on the screen
-			Dot dot;
+			Dot dot(10, 10, 0, 0);
+			girl* women[GIRLS_COUNT];
+			for(int i = 0; i < GIRLS_COUNT; i++){
+                women[i] = new girl(i*10, i*10, 0, 0);
+			}
 
 			//While application is running
 			while( !quit )
@@ -495,14 +541,31 @@ int main( int argc, char* args[] )
 				}
 
 				//Move the dot
+
 				dot.move();
+				for(int i = 0; i < GIRLS_COUNT; i++){
+                   women[i]->move();
+                }
 				//Clear screen
 				SDL_SetRenderDrawColor( gRenderer, 0xFF, 0xFF, 0xFF, 0xFF );
 				SDL_RenderClear( gRenderer );
 
 				//Render objects
 				dot.render();
-
+				for(int i = 0; i < GIRLS_COUNT; i++){
+                   women[i]->render();
+                }
+				if(std::clock() - start > 20000){
+                    for(int i = 0; i < GIRLS_COUNT; i++){
+                        women[i]->velCalcX();
+                    }
+                    }
+				if(std::clock() - start > 80000){
+                    start = std::clock();
+                    for(int i = 0; i < GIRLS_COUNT; i++){
+                        women[i]->velCalcY();
+                    }
+                    }
 				//Update screen
 				SDL_RenderPresent( gRenderer );
 			}
