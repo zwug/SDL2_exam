@@ -12,6 +12,7 @@ and may not be redistributed without written permission.*/
 int SCREEN_WIDTH = 640;
 int SCREEN_HEIGHT = 480;
 const int GIRLS_COUNT = 50;
+const int SEC_IN_YEAR = 500000;
 //Texture wrapper class
 class LTexture
 {
@@ -118,6 +119,16 @@ class Dot
 
 		//The velocity of the dot
 		float mVelX, mVelY;
+
+        LTexture gDotTexture;
+
+        bool loadMedia(std::string path);
+
+        void close();
+
+        int age;
+
+        bool married = 0;
 };
 
 class girl : public Dot{
@@ -136,6 +147,52 @@ public:
         mVelY += b;
     }
     void move();
+    int avergeMarriageAge = 24;
+    int birthRate = 10;
+    bool hasChild = 0;
+    void ChangeIfMarried(){
+        int diff = age - avergeMarriageAge;
+        int probability = rand() % 20;
+        if((diff == 1)||(diff == -1)){
+            if (probability < 3){
+                if(hasChild == true)
+                    gDotTexture.loadFromFile("img/family.png");
+                else
+                    gDotTexture.loadFromFile("img/married.png");
+                married = true;
+                }
+            }
+        else if(diff == 0){
+            if(probability < 5){
+                if(hasChild == true)
+                    gDotTexture.loadFromFile("img/family.png");
+                else
+                    gDotTexture.loadFromFile("img/married.png");
+                married = true;
+                }
+            }
+        else {
+            if (probability == 1){
+                if(hasChild == true)
+                    gDotTexture.loadFromFile("img/family.png");
+                else
+                    gDotTexture.loadFromFile("img/married.png");
+                married = true;
+                }
+        }
+    }
+
+    void ChangeIfHasChild(){
+        int diff = age - avergeMarriageAge;
+        int probability = rand() % 100;
+        if (probability < 10){
+            if(married == true)
+                gDotTexture.loadFromFile("img/family.png");
+            else
+                gDotTexture.loadFromFile("img/withbaby.png");
+            hasChild = true;
+        }
+    }
 };
 
 //Starts up SDL and creates window
@@ -154,7 +211,7 @@ SDL_Window* gWindow = NULL;
 SDL_Renderer* gRenderer = NULL;
 
 //Scene textures
-LTexture gDotTexture;
+//LTexture gDotTexture;
 
 LTexture::LTexture()
 {
@@ -286,8 +343,8 @@ void LTexture::render( int x, int y, SDL_Rect* clip, double angle, SDL_Point* ce
 	//Set clip rendering dimensions
 	if( clip != NULL )
 	{
-		renderQuad.w = clip->w;
-		renderQuad.h = clip->h;
+		renderQuad.w = 0;//clip->w;
+		renderQuad.h = 0;//clip->h;
 	}
 
 	//Render to screen
@@ -314,6 +371,7 @@ Dot::Dot(int x, int y, int VelX, int VelY)
     //Initialize the velocity
     mVelX = VelX;
     mVelY = VelY;
+    age = 18;
 }
 
 void Dot::handleEvent( SDL_Event& e )
@@ -458,18 +516,18 @@ bool init()
     for(i = 0; i < num_joysticks; ++i)
     {
       SDL_Joystick* js = SDL_JoystickOpen(i);
-      printf( "Joystick defined! %s\n", i );
+      printf( "Joystick defined! %i\n", i );
     }
 	return success;
 }
 
-bool loadMedia()
+bool Dot::loadMedia(std::string path)
 {
 	//Loading success flag
 	bool success = true;
 
 	//Load dot texture
-	if( !gDotTexture.loadFromFile( "img/dot.bmp" ) )
+	if( !gDotTexture.loadFromFile( path.c_str() ) )
 	{
 		printf( "Failed to load dot texture!\n" );
 		success = false;
@@ -478,7 +536,7 @@ bool loadMedia()
 	return success;
 }
 
-void close()
+void Dot::close()
 {
 	//Free loaded images
 	gDotTexture.free();
@@ -497,6 +555,12 @@ void close()
 int main( int argc, char* args[] )
 {
     std::clock_t start = std::clock();
+    std::clock_t startYear = std::clock();
+    Dot dot(10, 10, 0, 0);
+    girl* women[GIRLS_COUNT];
+    for(int i = 0; i < GIRLS_COUNT; i++){
+        women[i] = new girl(i*10, i*10, 0, 0);
+    }
 	//Start up SDL and create window
 	if( !init() )
 	{
@@ -505,24 +569,27 @@ int main( int argc, char* args[] )
 	else
 	{
 		//Load media
-		if( !loadMedia() )
+		std::string pathToGirls;
+		if( !dot.loadMedia("img/man.png") )
 		{
 			printf( "Failed to load media!\n" );
 		}
 		else
+		for(int i = 0; i < GIRLS_COUNT; i++){
+            if(i < 16) pathToGirls = "img/girl1.png";
+            else if(i < 32) pathToGirls = "img/girl2.png";
+            else pathToGirls = "img/girl3.png";
+            if( !women[i]->loadMedia(pathToGirls) )
+            {
+                printf( "Failed to load media!\n" );
+            }
+        }
 		{
 			//Main loop flag
 			bool quit = false;
 
 			//Event handler
 			SDL_Event e;
-
-			//The dot that will be moving around on the screen
-			Dot dot(10, 10, 0, 0);
-			girl* women[GIRLS_COUNT];
-			for(int i = 0; i < GIRLS_COUNT; i++){
-                women[i] = new girl(i*10, i*10, 0, 0);
-			}
 
 			//While application is running
 			while( !quit )
@@ -558,22 +625,35 @@ int main( int argc, char* args[] )
 				if(std::clock() - start > 20000){
                     for(int i = 0; i < GIRLS_COUNT; i++){
                         women[i]->velCalcX();
-                    }
+                        }
                     }
 				if(std::clock() - start > 80000){
                     start = std::clock();
                     for(int i = 0; i < GIRLS_COUNT; i++){
                         women[i]->velCalcY();
+                        }
                     }
+                if(std::clock() - startYear > SEC_IN_YEAR){
+                    for(int i = 0; i < GIRLS_COUNT; i++){
+                        if(!women[i]->married)
+                            women[i]->ChangeIfMarried();
+                        if(!women[i]->hasChild)
+                            women[i]->ChangeIfHasChild();
+                        women[i]->age += 1;
+                        }
+                    startYear = clock();
+                    printf("year passed!,%i \n", women[1]->age);
                     }
+
 				//Update screen
 				SDL_RenderPresent( gRenderer );
 			}
 		}
 	}
-
 	//Free resources and close SDL
-	close();
-
+	dot.close();
+	for(int i = 0; i < GIRLS_COUNT; i++){
+        women[i]->close();
+    }
 	return 0;
 }
