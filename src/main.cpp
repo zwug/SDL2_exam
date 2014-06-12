@@ -1,9 +1,6 @@
-/*This source code copyrighted by Lazy Foo' Productions (2004-2014)
-and may not be redistributed without written permission.*/
-
-//Using SDL, SDL_image, standard IO, and strings
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_ttf.h>
 #include <stdio.h>
 #include <string>
 #include <ctime>
@@ -13,6 +10,7 @@ int SCREEN_WIDTH = 640;
 int SCREEN_HEIGHT = 480;
 const int GIRLS_COUNT = 50;
 const int SEC_IN_YEAR = 500000;
+SDL_Color textColor = { 0, 0, 0 };
 //Texture wrapper class
 class LTexture
 {
@@ -59,39 +57,6 @@ class LTexture
 		int mHeight;
 };
 
-//The application time based timer
-class LTimer
-{
-    public:
-		//Initializes variables
-		LTimer();
-
-		//The various clock actions
-		void start();
-		void stop();
-		void pause();
-		void unpause();
-
-		//Gets the timer's time
-		Uint32 getTicks();
-
-		//Checks the status of the timer
-		bool isStarted();
-		bool isPaused();
-
-    private:
-		//The clock time when the timer started
-		Uint32 mStartTicks;
-
-		//The ticks stored when the timer was paused
-		Uint32 mPausedTicks;
-
-		//The timer status
-		bool mPaused;
-		bool mStarted;
-};
-
-//The dot that will move around on the screen
 class Dot
 {
     public:
@@ -133,7 +98,10 @@ class Dot
 
 class girl : public Dot{
 public:
-    girl(int x, int y, int VelX, int VelY):Dot(x, y, VelX, VelY){
+    girl(int x, int y, int VelX, int VelY, int bRate, int aAge):Dot(x, y, VelX, VelY){
+        avergeMarriageAge = aAge;
+        birthRate = aAge;
+        age = 17;
     };
 
     void velCalcX(){
@@ -147,9 +115,10 @@ public:
         mVelY += b;
     }
     void move();
-    int avergeMarriageAge = 24;
-    int birthRate = 10;
+    int avergeMarriageAge;
+    int birthRate;
     bool hasChild = 0;
+    int progress = 0;
     void ChangeIfMarried(){
         int diff = age - avergeMarriageAge;
         int probability = rand() % 20;
@@ -193,13 +162,40 @@ public:
             hasChild = true;
         }
     }
+
+    void getTheWoman(int x, int y, bool &quit){
+        if ((age == 35) && (!married)){
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
+                         "You lose!",
+                         "You're gonna die alone...",
+                         NULL);
+            quit = true;
+        }
+        if((abs(mPosX - x) < 30) && (abs(mPosY - y) < 30)){
+            progress += 1;
+            printf("progress: %i\n", progress);
+            quit = false;
+        }
+        if ((progress == 10) && (!married)){
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
+                         "Congratulations!",
+                         "You've won!",
+                         NULL);
+            quit = true;
+        }
+    }
 };
 
 //Starts up SDL and creates window
 bool init();
 
+//Globally used font
+TTF_Font *gFont = NULL;
+//Rendered texture
+LTexture gTextTexture;
 //Loads media
 bool loadMedia();
+
 
 //Frees media and shuts down SDL
 void close();
@@ -244,7 +240,7 @@ bool LTexture::loadFromFile( std::string path )
 	else
 	{
 		//Color key image
-		SDL_SetColorKey( loadedSurface, SDL_TRUE, SDL_MapRGB( loadedSurface->format, 0, 0xFF, 0xFF ) );
+		SDL_SetColorKey( loadedSurface, SDL_TRUE, SDL_MapRGB( loadedSurface->format, 0, 0x00, 0xFF ) );
 
 		//Create texture from surface pixels
         newTexture = SDL_CreateTextureFromSurface( gRenderer, loadedSurface );
@@ -268,7 +264,6 @@ bool LTexture::loadFromFile( std::string path )
 	return mTexture != NULL;
 }
 
-#ifdef _SDL_TTF_H
 bool LTexture::loadFromRenderedText( std::string textureText, SDL_Color textColor )
 {
 	//Get rid of preexisting texture
@@ -276,7 +271,11 @@ bool LTexture::loadFromRenderedText( std::string textureText, SDL_Color textColo
 
 	//Render text surface
 	SDL_Surface* textSurface = TTF_RenderText_Solid( gFont, textureText.c_str(), textColor );
-	if( textSurface != NULL )
+	if( textSurface == NULL )
+	{
+		printf( "Unable to render text surface! SDL_ttf Error: %s\n", TTF_GetError() );
+	}
+	else
 	{
 		//Create texture from surface pixels
         mTexture = SDL_CreateTextureFromSurface( gRenderer, textSurface );
@@ -294,16 +293,38 @@ bool LTexture::loadFromRenderedText( std::string textureText, SDL_Color textColo
 		//Get rid of old surface
 		SDL_FreeSurface( textSurface );
 	}
-	else
-	{
-		printf( "Unable to render text surface! SDL_ttf Error: %s\n", TTF_GetError() );
-	}
-
 
 	//Return success
 	return mTexture != NULL;
 }
-#endif
+
+
+bool loadText()
+{
+	//Loading success flag
+	bool success = true;
+
+	//Open the font
+	gFont = TTF_OpenFont( "fonts/lazy.ttf", 28 );
+	if( gFont == NULL )
+	{
+		printf( "Failed to load lazy font! SDL_ttf Error: %s\n", TTF_GetError() );
+		success = false;
+	}
+	else
+	{
+		//Render text
+		SDL_Color textColor = { 0, 0, 0 };
+		if( !gTextTexture.loadFromRenderedText( "The quick brown fox jumps over the lazy dog", textColor ) )
+		{
+			printf( "Failed to render text texture!\n" );
+			success = false;
+		}
+	}
+
+	return success;
+}
+
 
 void LTexture::free()
 {
@@ -400,6 +421,14 @@ void Dot::handleEvent( SDL_Event& e )
             case SDLK_RIGHT: mVelX -= DOT_VEL; break;
         }
     }
+    if( e.type == SDL_MOUSEMOTION )
+    {
+        //Get the mouse offsets
+        int x = e.motion.x;
+        int y = e.motion.y;
+        mPosX = x;
+        mPosY = y;
+    }
 }
 
 void Dot::move()
@@ -413,7 +442,6 @@ void Dot::move()
         //Move back
         mPosX -= mVelX;
     }
-
     //Move the dot up or down
     mPosY += mVelY;
 
@@ -498,13 +526,18 @@ bool init()
                 else
                 {
                     //Initialize renderer color
-                    SDL_SetRenderDrawColor( gRenderer, 0xFF, 0xFF, 0xFF, 0xFF );
+                    SDL_SetRenderDrawColor( gRenderer, 0xFF, 0xFF, 0xE0, 0xFF );
 
                     //Initialize PNG loading
                     int imgFlags = IMG_INIT_PNG;
                     if( !( IMG_Init( imgFlags ) & imgFlags ) )
                     {
                         printf( "SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError() );
+                        success = false;
+                    }
+                    if( TTF_Init() == -1 )
+                    {
+                        printf( "SDL_ttf could not initialize! SDL_ttf Error: %s\n", TTF_GetError() );
                         success = false;
                     }
                 }
@@ -540,13 +573,11 @@ void Dot::close()
 {
 	//Free loaded images
 	gDotTexture.free();
-
 	//Destroy window
 	SDL_DestroyRenderer( gRenderer );
 	SDL_DestroyWindow( gWindow );
 	gWindow = NULL;
 	gRenderer = NULL;
-
 	//Quit SDL subsystems
 	IMG_Quit();
 	SDL_Quit();
@@ -554,12 +585,71 @@ void Dot::close()
 
 int main( int argc, char* args[] )
 {
+    int x;
+    int aAge;
+    int bRate;
+    bool quit = false;
+    printf("Chose the target country\n");
+    printf("1 - Russia\n");
+    printf("2 - France\n");
+    printf("3 - Spain\n");
+    printf("4 - Hungary\n");
+    printf("5 - Afganistan\n");
+    printf("6 - USA\n");
+    printf("7 - Japan\n");
+    printf("8 - Australia\n");
+    printf("9 - Nepal\n");
+    scanf("%d", &x);
+    switch (x){
+        case 1:
+            aAge = 24;
+            bRate = 10;
+            break;
+        case 2:
+            aAge = 31;
+            bRate = 13;
+            break;
+        case 3:
+            aAge = 29;
+            bRate = 10;
+            break;
+        case 4:
+            aAge = 28;
+            bRate = 9;
+            break;
+        case 5:
+            aAge = 18;
+            bRate = 50;
+            break;
+        case 6:
+            aAge = 25;
+            bRate = 14;
+            break;
+        case 7:
+            aAge = 28;
+            bRate = 9;
+            break;
+        case 8:
+            aAge = 29;
+            bRate = 13;
+            break;
+        case 9:
+            aAge = 19;
+            bRate = 30;
+            break;
+        default:
+            quit = true;
+            printf("Wrong parametr");
+            break;
+        };
+    SDL_ShowCursor(SDL_DISABLE);
+    SDL_ShowCursor(0);
     std::clock_t start = std::clock();
     std::clock_t startYear = std::clock();
     Dot dot(10, 10, 0, 0);
     girl* women[GIRLS_COUNT];
     for(int i = 0; i < GIRLS_COUNT; i++){
-        women[i] = new girl(i*10, i*10, 0, 0);
+        women[i] = new girl(i*10, i*10, 0, 0, bRate, aAge);
     }
 	//Start up SDL and create window
 	if( !init() )
@@ -574,6 +664,10 @@ int main( int argc, char* args[] )
 		{
 			printf( "Failed to load media!\n" );
 		}
+		if( !loadText() )
+		{
+			printf( "Failed to load media!\n" );
+		}
 		else
 		for(int i = 0; i < GIRLS_COUNT; i++){
             if(i < 16) pathToGirls = "img/girl1.png";
@@ -585,12 +679,8 @@ int main( int argc, char* args[] )
             }
         }
 		{
-			//Main loop flag
-			bool quit = false;
-
 			//Event handler
 			SDL_Event e;
-
 			//While application is running
 			while( !quit )
 			{
@@ -606,19 +696,21 @@ int main( int argc, char* args[] )
 					//Handle input for the dot
 					dot.handleEvent( e );
 				}
-
-				//Move the dot
-
 				dot.move();
 				for(int i = 0; i < GIRLS_COUNT; i++){
                    women[i]->move();
                 }
 				//Clear screen
-				SDL_SetRenderDrawColor( gRenderer, 0xFF, 0xFF, 0xFF, 0xFF );
+				SDL_SetRenderDrawColor( gRenderer, 0xFF, 0xFF, 0xE0, 0xFF );
 				SDL_RenderClear( gRenderer );
+				char ageStr[50];
+				sprintf(ageStr, "%d", women[0]->age);
+				strcat(ageStr, " years old");
+				gTextTexture.loadFromRenderedText(ageStr, textColor );
 
 				//Render objects
 				dot.render();
+				gTextTexture.render(1150, 670);
 				for(int i = 0; i < GIRLS_COUNT; i++){
                    women[i]->render();
                 }
@@ -631,6 +723,9 @@ int main( int argc, char* args[] )
                     start = std::clock();
                     for(int i = 0; i < GIRLS_COUNT; i++){
                         women[i]->velCalcY();
+                        women[i]->getTheWoman(dot.mPosX, dot.mPosY, quit);
+                        if(quit == true)
+                            break;
                         }
                     }
                 if(std::clock() - startYear > SEC_IN_YEAR){
